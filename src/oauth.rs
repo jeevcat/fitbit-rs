@@ -4,11 +4,14 @@
 //! This capture method was inspired by
 //! [oauth2-rs](https://github.com/ramosbugs/oauth2-rs/tree/master/examples).
 
-use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use oauth2::{
-    basic::BasicClient, reqwest::async_http_client, url::Url, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, Scope, TokenResponse, TokenUrl,
+    basic::{BasicClient, BasicTokenType},
+    reqwest::async_http_client,
+    url::Url,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, Scope,
+    StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -17,19 +20,60 @@ use tokio::{
 
 use crate::Result;
 
-pub async fn get_cached_token(client_id: &str, client_secret: &str) -> String {
-    match read_auth_token() {
-        Ok(token) => token,
-        Err(_) => {
-            let token = get_token(client_id, client_secret).await;
-            write_auth_token(&token);
-            token
+type Token = StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>;
+
+pub struct Auth {
+    client_id: String,
+    client_secret: String,
+    cache_path: Option<PathBuf>,
+    token: Option<Token>,
+}
+
+impl Auth {
+    pub fn new(client_id: String, client_secret: String, cache_path: Option<PathBuf>) -> Self {
+        Self {
+            client_id,
+            client_secret,
+            cache_path,
+            token: None,
         }
+    }
+    pub fn with_cache<P>(&mut self, path: P) -> &mut Self
+    where
+        P: Into<PathBuf>,
+    {
+        self.cache_path = Some(path.into());
+        self
+    }
+
+    pub async fn auth_interactive(&mut self) {
+        if self.token.is_some() {
+            return;
+        }
+
+        if let Some(cache_path) = &self.cache_path {
+            if let Ok(token) = read_auth_token(cache_path) {
+                self.token = Some(token);
+                return;
+            }
+        }
+
+        let token = fetch_token(&self.client_id, &self.client_secret).await;
+        if let Some(cache_path) = &self.cache_path {
+            write_auth_token(&token, cache_path).expect("Couldn't write auth token");
+        }
+        self.token = Some(token)
+    }
+
+    pub fn get_token(&self) -> Option<&str> {
+        self.token
+            .as_ref()
+            .map(|t| t.access_token().secret().as_str())
     }
 }
 
 /// Get a token via the OAuth 2.0 Implicit Grant Flow
-async fn get_token(client_id: &str, client_secret: &str) -> String {
+async fn fetch_token(client_id: &str, client_secret: &str) -> Token {
     let client = BasicClient::new(
         ClientId::new(client_id.to_owned()),
         Some(ClientSecret::new(client_secret.to_owned())),
@@ -51,7 +95,7 @@ async fn get_token(client_id: &str, client_secret: &str) -> String {
         .add_scope(Scope::new("weight".to_string()))
         .url();
 
-    opener::open(authorize_url.to_string()).expect("failed to open authorize URL");
+    println!("Open the following in your browser: {}", authorize_url);
 
     let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
     if let Ok((mut stream, _)) = listener.accept().await {
@@ -118,20 +162,21 @@ async fn get_token(client_id: &str, client_secret: &str) -> String {
             }
         };
 
-        return token.access_token().secret().clone();
+        return token;
     }
 
     unreachable!();
 }
 
-// For now, just record the token to a file.
-const TOKEN_FILE: &str = "auth_token";
-
-fn write_auth_token(token: &str) {
-    let mut file = std::fs::File::create(TOKEN_FILE).unwrap();
-    file.write_all(token.as_bytes()).unwrap();
+fn write_auth_token(token: &Token, path: &Path) -> Result<()> {
+    std::fs::create_dir_all(path.parent().unwrap())?;
+    let file = std::fs::File::create(path)?;
+    serde_json::to_writer_pretty(file, &token)?;
+    Ok(())
 }
 
-fn read_auth_token() -> Result<String> {
-    Ok(std::fs::read_to_string(TOKEN_FILE)?)
+fn read_auth_token(path: &Path) -> Result<Token> {
+    let file = std::fs::File::open(path)?;
+    let token = serde_json::from_reader(file)?;
+    Ok(token)
 }

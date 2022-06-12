@@ -1,21 +1,24 @@
+use std::path::PathBuf;
+
 use api::{body, body_time_series};
+use oauth::Auth;
 use reqwest::{StatusCode, Url};
 use serde::{de::DeserializeOwned, Serialize};
 
 mod api;
 mod error;
-mod models;
 mod oauth;
+mod util;
+
+pub mod models;
 
 /// A convenience type with a default error type of [`Error`].
 pub type Result<T, E = error::Error> = std::result::Result<T, E>;
 
 const BASE_URL: &str = "https://api.fitbit.com";
-
 pub struct Client {
+    auth: Auth,
     client: reqwest::Client,
-    client_id: String,
-    client_secret: String,
     base_url: Url,
 }
 
@@ -23,14 +26,26 @@ impl Client {
     pub fn new(client_id: &str, client_secret: &str) -> Self {
         Self {
             base_url: Url::parse(BASE_URL).unwrap(),
-            client_id: client_id.to_owned(),
-            client_secret: client_secret.to_owned(),
+            auth: Auth::new(client_id.to_owned(), client_secret.to_owned(), None),
             client: reqwest::ClientBuilder::new()
                 .user_agent("fitbit-rs")
                 .build()
                 .unwrap(),
         }
     }
+    pub fn with_cache<P>(mut self, path: P) -> Self
+    where
+        P: Into<PathBuf>,
+    {
+        self.auth.with_cache(path);
+        self
+    }
+
+    pub async fn auth_interactive(mut self) -> Self {
+        self.auth.auth_interactive().await;
+        self
+    }
+
     pub fn body(&self) -> body::BodyHandler {
         body::BodyHandler::new(self)
     }
@@ -188,8 +203,14 @@ impl Client {
 
     /// Execute the given `request` using the Client.
     pub async fn execute(&self, mut request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
-        request = request
-            .bearer_auth(oauth::get_cached_token(&self.client_id, &self.client_secret).await);
+        let token = match self.auth.get_token() {
+            Some(t) => t,
+            None => {
+                eprintln!("Couldn't get token. Ensure you've called interactive_auth() first.");
+                std::process::exit(1);
+            }
+        };
+        request = request.bearer_auth(token);
 
         let result = request.send().await?;
         let status = result.status();
@@ -208,14 +229,5 @@ impl Client {
             std::process::exit(1);
         };
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
     }
 }

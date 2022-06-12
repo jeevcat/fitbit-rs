@@ -5,7 +5,8 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LogWeightResponse {
+#[allow(dead_code)]
+struct LogWeightResponse {
     pub weight_log: Vec<WeightLog>,
 }
 
@@ -17,7 +18,7 @@ pub struct WeightLog {
     pub log_id: usize,
     pub time: NaiveTime,
     pub weight: f32,
-    pub source: String, // TODO: Device enum
+    pub source: Option<String>, // TODO: Device enum
 }
 
 #[cfg(test)]

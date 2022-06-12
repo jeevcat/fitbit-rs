@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use serde::Deserialize;
 
-use crate::{models::body::weight::WeightLog, Client, Result};
+use crate::{models::body::weight::WeightLog, util::date_or_today, Client, Result};
 
 pub struct BodyHandler<'client> {
     client: &'client Client,
@@ -14,11 +14,11 @@ impl<'client> BodyHandler<'client> {
 
     pub async fn get_weight_log(
         &self,
-        date: &NaiveDate,
+        date: Option<NaiveDate>,
         user_id: Option<&str>,
     ) -> Result<Vec<WeightLog>> {
         let user_id = user_id.unwrap_or("-");
-        let date = date.format("%Y-%m-%d");
+        let date = date_or_today(date);
 
         #[derive(Deserialize)]
         struct Response {
