@@ -41,7 +41,7 @@ impl Client {
         self
     }
 
-    pub async fn auth_interactive(mut self) -> Self {
+    pub async fn auth_interactive(self) -> Self {
         self.auth.auth_interactive().await;
         self
     }
@@ -61,8 +61,8 @@ impl Client {
 }
 
 impl Client {
-    /// Send a `POST` request to `route` with an optional body, returning the body
-    /// of the response.
+    /// Send a `POST` request to `route` with an optional body, returning the
+    /// body of the response.
     pub async fn post<P: Serialize + ?Sized, R: DeserializeOwned>(
         &self,
         route: &str,
@@ -89,8 +89,8 @@ impl Client {
         self.execute(request).await
     }
 
-    /// Send a `GET` request to `route` with optional query parameters, returning
-    /// the body of the response.
+    /// Send a `GET` request to `route` with optional query parameters,
+    /// returning the body of the response.
     pub async fn get<R, P>(&self, route: &str, parameters: Option<&P>) -> Result<R>
     where
         P: Serialize + ?Sized,
@@ -202,31 +202,35 @@ impl Client {
     }
 
     /// Execute the given `request` using the Client.
-    pub async fn execute(&self, mut request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
-        let token = match self.auth.get_token() {
+    pub async fn execute(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
+        let token = self.auth.get_token();
+        let token = match token.as_deref() {
             Some(t) => t,
             None => {
                 eprintln!("Couldn't get token. Ensure you've called interactive_auth() first.");
                 std::process::exit(1);
             }
         };
-        request = request.bearer_auth(token);
+        let authed_request = request.try_clone().unwrap().bearer_auth(token);
 
-        let result = request.send().await?;
+        let result = authed_request.send().await?;
         let status = result.status();
         if !status.is_success() {
-            eprintln!("Bad HTTP status code: {}", status);
             match status {
                 StatusCode::UNAUTHORIZED => {
-                    eprintln!("Check that your API token is correct?");
-                    eprintln!("Error: {}", result.text().await.unwrap())
+                    println!("Refreshing token...");
+                    let token = self.auth.refresh_token().await;
+                    if let Some(token) = token.as_deref() {
+                        let authed_request = request.bearer_auth(&token);
+                        let result = authed_request.send().await?;
+                        return Ok(result);
+                    }
                 }
-                StatusCode::BAD_REQUEST => {
-                    eprintln!("Error: {}", result.text().await.unwrap())
+                _ => {
+                    eprintln!("Error: {}", result.text().await.unwrap());
+                    std::process::exit(1);
                 }
-                _ => (),
             };
-            std::process::exit(1);
         };
         Ok(result)
     }
