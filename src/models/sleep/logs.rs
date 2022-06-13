@@ -1,6 +1,7 @@
 //! Get sleep logs for a user.
 //!
-//! [More information?](https//dev.fitbit.com/build/reference/web-api/sleep/#get-sleep-logs)
+//! [More information?](https//dev.fitbit.com/build/reference/web-api/sleep/#
+//! get-sleep-logs)
 
 use serde::Deserialize;
 

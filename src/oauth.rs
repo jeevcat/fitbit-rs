@@ -4,14 +4,18 @@
 //! This capture method was inspired by
 //! [oauth2-rs](https://github.com/ramosbugs/oauth2-rs/tree/master/examples).
 
-use std::path::{Path, PathBuf};
+use std::{
+    cell::{Ref, RefCell},
+    ops::Deref,
+    path::{Path, PathBuf},
+};
 
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
     reqwest::async_http_client,
     url::Url,
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, Scope,
-    StandardTokenResponse, TokenResponse, TokenUrl,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields,
+    RefreshToken, Scope, StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -26,7 +30,7 @@ pub struct Auth {
     client_id: String,
     client_secret: String,
     cache_path: Option<PathBuf>,
-    token: Option<Token>,
+    token: RefCell<Option<Token>>,
 }
 
 impl Auth {
@@ -35,7 +39,7 @@ impl Auth {
             client_id,
             client_secret,
             cache_path,
-            token: None,
+            token: RefCell::new(None),
         }
     }
     pub fn with_cache<P>(&mut self, path: P) -> &mut Self
@@ -46,40 +50,86 @@ impl Auth {
         self
     }
 
-    pub async fn auth_interactive(&mut self) {
-        if self.token.is_some() {
+    pub async fn auth_interactive(&self) {
+        if self.token.borrow().is_some() {
             return;
         }
 
         if let Some(cache_path) = &self.cache_path {
             if let Ok(token) = read_auth_token(cache_path) {
-                self.token = Some(token);
+                *self.token.borrow_mut() = Some(token);
                 return;
             }
         }
 
         let token = fetch_token(&self.client_id, &self.client_secret).await;
+        self.save_token(token);
+    }
+
+    pub async fn refresh_token(&self) -> Option<impl Deref<Target = str> + '_> {
+        if let Some(refresh_token) = self.get_refresh_token() {
+            let client = client(&self.client_id, &self.client_secret);
+            let new_token = match client
+                .exchange_refresh_token(&refresh_token)
+                .request_async(async_http_client)
+                .await
+            {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("OAuth2: {}", e);
+                    eprintln!("Invalid refresh token. Clearing.");
+                    if let Some(cache_path) = &self.cache_path {
+                        clear_auth_token(cache_path).unwrap();
+                    }
+                    std::process::exit(1);
+                }
+            };
+            self.save_token(new_token);
+            return self.get_token();
+        }
+
+        None
+    }
+
+    pub fn get_token(&self) -> Option<impl Deref<Target = str> + '_> {
+        let token = self.token.borrow();
+        if token.is_some() {
+            Some(Ref::map(token, |o| {
+                o.as_ref().unwrap().access_token().secret().as_str()
+            }))
+        } else {
+            None
+        }
+    }
+
+    fn get_refresh_token(&self) -> Option<RefreshToken> {
+        self.token
+            .borrow()
+            .as_ref()
+            .and_then(|t| t.refresh_token())
+            .map(|r| r.to_owned())
+    }
+
+    fn save_token(&self, token: Token) {
         if let Some(cache_path) = &self.cache_path {
             write_auth_token(&token, cache_path).expect("Couldn't write auth token");
         }
-        self.token = Some(token)
-    }
-
-    pub fn get_token(&self) -> Option<&str> {
-        self.token
-            .as_ref()
-            .map(|t| t.access_token().secret().as_str())
+        *self.token.borrow_mut() = Some(token);
     }
 }
 
-/// Get a token via the OAuth 2.0 Implicit Grant Flow
-async fn fetch_token(client_id: &str, client_secret: &str) -> Token {
-    let client = BasicClient::new(
+fn client(client_id: &str, client_secret: &str) -> BasicClient {
+    BasicClient::new(
         ClientId::new(client_id.to_owned()),
         Some(ClientSecret::new(client_secret.to_owned())),
         AuthUrl::new("https://www.fitbit.com/oauth2/authorize".to_string()).unwrap(),
         Some(TokenUrl::new("https://api.fitbit.com/oauth2/token".to_string()).unwrap()),
-    );
+    )
+}
+
+/// Get a token via the OAuth 2.0 Implicit Grant Flow
+async fn fetch_token(client_id: &str, client_secret: &str) -> Token {
+    let client = client(client_id, client_secret);
 
     // Generate the authorization URL to which we'll redirect the user.
     let (authorize_url, csrf_state) = client
@@ -172,6 +222,11 @@ fn write_auth_token(token: &Token, path: &Path) -> Result<()> {
     std::fs::create_dir_all(path.parent().unwrap())?;
     let file = std::fs::File::create(path)?;
     serde_json::to_writer_pretty(file, &token)?;
+    Ok(())
+}
+
+fn clear_auth_token(path: &Path) -> Result<()> {
+    std::fs::remove_file(path)?;
     Ok(())
 }
 
