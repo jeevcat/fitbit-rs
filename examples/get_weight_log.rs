@@ -9,7 +9,7 @@ async fn main() -> fitbit_rs::Result<()> {
     let client_secret =
         std::env::var("CLIENT_SECRET").expect("CLIENT_SECRET env variable is required");
     let client = Client::new(&client_id, &client_secret)
-        .with_cache("tokens")
+        .with_cache("tokens.json")
         .auth_interactive()
         .await;
     let start_date = Utc::now().naive_utc().date() - Duration::days(31);
