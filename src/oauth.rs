@@ -97,7 +97,7 @@ async fn fetch_token(client_id: &str, client_secret: &str) -> Token {
 
     println!("Open the following in your browser: {}", authorize_url);
 
-    let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
     if let Ok((mut stream, _)) = listener.accept().await {
         let code;
         let state;
