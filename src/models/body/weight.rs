@@ -15,7 +15,7 @@ struct LogWeightResponse {
 pub struct WeightLog {
     pub bmi: f32,
     pub date: NaiveDate,
-    pub log_id: usize,
+    pub log_id: u64,
     pub time: NaiveTime,
     pub weight: f32,
     pub source: Option<String>, // TODO: Device enum
