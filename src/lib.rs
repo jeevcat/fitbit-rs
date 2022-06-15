@@ -55,7 +55,7 @@ impl Client {
 }
 
 impl Client {
-    pub fn absolute_url(&self, url: &str) -> Result<Url> {
+    pub(crate) fn absolute_url(&self, url: &str) -> Result<Url> {
         Ok(self.base_url.join(url)?)
     }
 }
@@ -63,7 +63,7 @@ impl Client {
 impl Client {
     /// Send a `POST` request to `route` with an optional body, returning the
     /// body of the response.
-    pub async fn post<P: Serialize + ?Sized, R: DeserializeOwned>(
+    pub(crate) async fn post<P: Serialize + ?Sized, R: DeserializeOwned>(
         &self,
         route: &str,
         body: Option<&P>,
@@ -75,7 +75,7 @@ impl Client {
     }
 
     /// Send a `POST` request with no additional pre/post-processing.
-    pub async fn _post<P: Serialize + ?Sized>(
+    pub(crate) async fn _post<P: Serialize + ?Sized>(
         &self,
         url: impl reqwest::IntoUrl,
         body: Option<&P>,
@@ -91,7 +91,7 @@ impl Client {
 
     /// Send a `GET` request to `route` with optional query parameters,
     /// returning the body of the response.
-    pub async fn get<R, P>(&self, route: &str, parameters: Option<&P>) -> Result<R>
+    pub(crate) async fn get<R, P>(&self, route: &str, parameters: Option<&P>) -> Result<R>
     where
         P: Serialize + ?Sized,
         R: DeserializeOwned,
@@ -103,7 +103,7 @@ impl Client {
     }
 
     /// Send a `GET` request with no additional post-processing.
-    pub async fn _get<P: Serialize + ?Sized>(
+    pub(crate) async fn _get<P: Serialize + ?Sized>(
         &self,
         url: impl reqwest::IntoUrl,
         parameters: Option<&P>,
@@ -119,7 +119,7 @@ impl Client {
 
     /// Send a `PATCH` request to `route` with optional query parameters,
     /// returning the body of the response.
-    pub async fn patch<R, B>(&self, route: &str, body: Option<&B>) -> Result<R>
+    pub(crate) async fn patch<R, B>(&self, route: &str, body: Option<&B>) -> Result<R>
     where
         B: Serialize + ?Sized,
         R: DeserializeOwned,
@@ -131,7 +131,7 @@ impl Client {
     }
 
     /// Send a `PATCH` request with no additional post-processing.
-    pub async fn _patch<B: Serialize + ?Sized>(
+    pub(crate) async fn _patch<B: Serialize + ?Sized>(
         &self,
         url: impl reqwest::IntoUrl,
         parameters: Option<&B>,
@@ -147,7 +147,7 @@ impl Client {
 
     /// Send a `PUT` request to `route` with optional query parameters,
     /// returning the body of the response.
-    pub async fn put<R, B>(&self, route: &str, body: Option<&B>) -> Result<R>
+    pub(crate) async fn put<R, B>(&self, route: &str, body: Option<&B>) -> Result<R>
     where
         B: Serialize + ?Sized,
         R: DeserializeOwned,
@@ -159,7 +159,7 @@ impl Client {
     }
 
     /// Send a `PATCH` request with no additional post-processing.
-    pub async fn _put<B: Serialize + ?Sized>(
+    pub(crate) async fn _put<B: Serialize + ?Sized>(
         &self,
         url: impl reqwest::IntoUrl,
         body: Option<&B>,
@@ -175,7 +175,7 @@ impl Client {
 
     /// Send a `DELETE` request to `route` with optional query parameters,
     /// returning the body of the response.
-    pub async fn delete<R, A, P>(&self, route: &str, parameters: Option<&P>) -> Result<R>
+    pub(crate) async fn delete<R, A, P>(&self, route: &str, parameters: Option<&P>) -> Result<R>
     where
         P: Serialize + ?Sized,
         R: DeserializeOwned,
@@ -187,7 +187,7 @@ impl Client {
     }
 
     /// Send a `DELETE` request with no additional post-processing.
-    pub async fn _delete<P: Serialize + ?Sized>(
+    pub(crate) async fn _delete<P: Serialize + ?Sized>(
         &self,
         url: impl reqwest::IntoUrl,
         parameters: Option<&P>,
@@ -202,7 +202,11 @@ impl Client {
     }
 
     /// Execute the given `request` using the Client.
-    pub async fn execute(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
+    pub(crate) async fn execute(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response> {
+        // let token = self.auth.refresh_token().await;
         let token = self.auth.get_token();
         let token = match token.as_deref() {
             Some(t) => t,

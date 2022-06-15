@@ -3,13 +3,6 @@
 use chrono::naive::{NaiveDate, NaiveTime};
 use serde::Deserialize;
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-struct LogWeightResponse {
-    pub weight_log: Vec<WeightLog>,
-}
-
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WeightLog {
@@ -39,25 +32,5 @@ mod tests {
         "#;
 
         let _res: WeightLog = serde_json::from_str(data).unwrap();
-    }
-
-    #[test]
-    fn deserialize_log_weight() {
-        let data = r#"
-{
-    "weightLog": [
-    {
-        "bmi": 23.57,
-        "date": "2012-03-05",
-        "logId": 1330991999000,
-        "time": "23:59:59",
-        "weight": 73,
-        "source": "API"
-    }
-    ]
-}
-        "#;
-
-        let _res: LogWeightResponse = serde_json::from_str(data).unwrap();
     }
 }

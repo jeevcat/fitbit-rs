@@ -26,7 +26,7 @@ use crate::Result;
 
 type Token = StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>;
 
-pub struct Auth {
+pub(crate) struct Auth {
     client_id: String,
     client_secret: String,
     cache_path: Option<PathBuf>,
@@ -34,7 +34,11 @@ pub struct Auth {
 }
 
 impl Auth {
-    pub fn new(client_id: String, client_secret: String, cache_path: Option<PathBuf>) -> Self {
+    pub(crate) fn new(
+        client_id: String,
+        client_secret: String,
+        cache_path: Option<PathBuf>,
+    ) -> Self {
         Self {
             client_id,
             client_secret,
@@ -42,7 +46,7 @@ impl Auth {
             token: RefCell::new(None),
         }
     }
-    pub fn with_cache<P>(&mut self, path: P) -> &mut Self
+    pub(crate) fn with_cache<P>(&mut self, path: P) -> &mut Self
     where
         P: Into<PathBuf>,
     {
@@ -50,7 +54,7 @@ impl Auth {
         self
     }
 
-    pub async fn auth_interactive(&self) {
+    pub(crate) async fn auth_interactive(&self) {
         if self.token.borrow().is_some() {
             return;
         }
@@ -66,7 +70,7 @@ impl Auth {
         self.save_token(token);
     }
 
-    pub async fn refresh_token(&self) -> Option<impl Deref<Target = str> + '_> {
+    pub(crate) async fn refresh_token(&self) -> Option<impl Deref<Target = str> + '_> {
         if let Some(refresh_token) = self.get_refresh_token() {
             let client = client(&self.client_id, &self.client_secret);
             let new_token = match client
@@ -91,7 +95,7 @@ impl Auth {
         None
     }
 
-    pub fn get_token(&self) -> Option<impl Deref<Target = str> + '_> {
+    pub(crate) fn get_token(&self) -> Option<impl Deref<Target = str> + '_> {
         let token = self.token.borrow();
         if token.is_some() {
             Some(Ref::map(token, |o| {
