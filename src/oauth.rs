@@ -71,28 +71,29 @@ impl Auth {
     }
 
     pub(crate) async fn refresh_token(&self) -> Option<impl Deref<Target = str> + '_> {
-        if let Some(refresh_token) = self.get_refresh_token() {
-            let client = client(&self.client_id, &self.client_secret);
-            let new_token = match client
-                .exchange_refresh_token(&refresh_token)
-                .request_async(async_http_client)
-                .await
-            {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("OAuth2: {}", e);
-                    eprintln!("Invalid refresh token. Clearing.");
-                    if let Some(cache_path) = &self.cache_path {
-                        clear_auth_token(cache_path).unwrap();
-                    }
-                    std::process::exit(1);
-                }
-            };
-            self.save_token(new_token);
-            return self.get_token();
-        }
+        let refresh_token = match self.get_refresh_token() {
+            Some(refresh_token) => refresh_token,
+            None => return None,
+        };
 
-        None
+        let client = client(&self.client_id, &self.client_secret);
+        let new_token = match client
+            .exchange_refresh_token(&refresh_token)
+            .request_async(async_http_client)
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("OAuth2: {}", e);
+                eprintln!("Invalid refresh token. Clearing.");
+                if let Some(cache_path) = &self.cache_path {
+                    clear_auth_token(cache_path).unwrap();
+                }
+                std::process::exit(1);
+            }
+        };
+        self.save_token(new_token);
+        self.get_token()
     }
 
     pub(crate) fn get_token(&self) -> Option<impl Deref<Target = str> + '_> {
