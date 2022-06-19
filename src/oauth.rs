@@ -5,11 +5,11 @@
 //! [oauth2-rs](https://github.com/ramosbugs/oauth2-rs/tree/master/examples).
 
 use std::{
-    cell::{Ref, RefCell},
     ops::Deref,
     path::{Path, PathBuf},
 };
 
+use debug_cell::{Ref, RefCell};
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
     reqwest::async_http_client,
