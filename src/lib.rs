@@ -206,16 +206,13 @@ impl Client {
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<reqwest::Response> {
-        // let token = self.auth.refresh_token().await;
-        let token = self.auth.get_token();
-        let token = match token.as_deref() {
-            Some(t) => t,
-            None => {
-                eprintln!("Couldn't get token. Ensure you've called interactive_auth() first.");
-                std::process::exit(1);
-            }
+        let authed_request = {
+            let token_ref = self.auth.get_token();
+            let token = token_ref
+                .as_deref()
+                .expect("Couldn't get token. Ensure you've called interactive_auth() first.");
+            request.try_clone().unwrap().bearer_auth(token)
         };
-        let authed_request = request.try_clone().unwrap().bearer_auth(token);
 
         let result = authed_request.send().await?;
         let status = result.status();
