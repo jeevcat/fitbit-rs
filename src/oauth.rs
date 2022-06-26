@@ -5,6 +5,7 @@
 //! [oauth2-rs](https://github.com/ramosbugs/oauth2-rs/tree/master/examples).
 
 use std::{
+    error::Error,
     ops::Deref,
     path::{Path, PathBuf},
 };
@@ -85,6 +86,9 @@ impl Auth {
             Ok(t) => t,
             Err(e) => {
                 eprintln!("OAuth2: {}", e);
+                if let Some(source) = e.source() {
+                    eprintln!("source: {}", source);
+                }
                 eprintln!("Invalid refresh token. Clearing.");
                 if let Some(cache_path) = &self.cache_path {
                     clear_auth_token(cache_path).unwrap();
